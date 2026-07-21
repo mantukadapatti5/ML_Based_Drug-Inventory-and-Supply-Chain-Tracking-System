@@ -1,0 +1,158 @@
+services:
+  # --- CORE DATA STORES ---
+  postgres:
+    image: postgres:15-alpine
+    container_name: pharma_postgres
+    environment:
+      POSTGRES_USER: jarvis_admin
+      POSTGRES_PASSWORD: SecretPassword123
+      POSTGRES_DB: drug_supply_chain
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - pharma_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis_admin -d drug_supply_chain"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: pharma_influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: InfluxPassword123
+      DOCKER_INFLUXDB_INIT_ORG: pharma_consortium
+      DOCKER_INFLUXDB_INIT_BUCKET: telemetry_stream
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: pharma-influx-token
+    volumes:
+      - influxdata:/var/lib/influxdb2
+    networks:
+      - pharma_network
+
+  mongodb:
+    image: mongo:6.0
+    container_name: pharma_mongodb
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo_admin
+      MONGO_INITDB_ROOT_PASSWORD: MongoPassword123
+    volumes:
+      - mongodata:/data/db
+    networks:
+      - pharma_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.1
+    container_name: pharma_redpanda
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    volumes:
+      - redpandadata:/var/lib/redpanda/data
+    networks:
+      - pharma_network
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: pharma_mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - pharma_network
+
+  # --- APPLICATION TIER ---
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: pharma_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://jarvis_admin:SecretPassword123@postgres:5432/drug_supply_chain
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: pharma-influx-token
+      INFLUXDB_ORG: pharma_consortium
+      INFLUXDB_BUCKET: telemetry_stream
+      MONGODB_URL: mongodb://mongo_admin:MongoPassword123@mongodb:27017/?authSource=admin
+      MONGO_DB: drug_supply_chain
+      KAFKA_SERVERS: redpanda:9092
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      FABRIC_PEER_ENDPOINT: peer0.org1.example.com:7051
+      FABRIC_CHANNEL: pharmacatena
+      FABRIC_CHAINCODE: provenance
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_started
+      mongodb:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    volumes:
+      - ./data:/app/data
+      - ./backend/ml/saved_models:/app/backend/ml/saved_models
+    networks:
+      - pharma_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pharma_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - pharma_network
+
+volumes:
+  pgdata:
+  influxdata:
+  mongodata:
+  redpandadata:
+
+networks:
+  pharma_network:
+    driver: bridge
