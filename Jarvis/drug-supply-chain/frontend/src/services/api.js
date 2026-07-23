@@ -1,19 +1,29 @@
 import axios from "axios";
 
-const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "");
-console.log("🔧 API Base URL:", configuredBaseUrl || "http://localhost:8000");
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, "");
+const defaultBaseUrl = configuredBaseUrl || "";
+
+console.log("🔧 API Base URL:", defaultBaseUrl || "same-origin");
 
 const api = axios.create({
-  baseURL: configuredBaseUrl || "http://localhost:8000",
+  baseURL: defaultBaseUrl,
   headers: { "Content-Type": "application/json" },
   timeout: 30000,
 });
 
-// Log all requests
 api.interceptors.request.use((config) => {
-  console.log(`📤 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, config.data);
+  const requestUrl = `${config.baseURL || ""}${config.url}`;
+  console.log(`📤 ${config.method?.toUpperCase()} ${requestUrl}`, config.data);
   return config;
 });
+
+// No retry-on-404 fallback anymore — errors should surface as-is so a real
+// route problem shows up immediately instead of being silently re-tried
+// against a second URL.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => Promise.reject(error)
+);
 
 export const setAuthToken = (token) => {
   if (token) api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -31,13 +41,9 @@ export const getAnomalyLogs = (params) => api.get("/api/anomalies/logs", { param
 export const getAnomalyLogsFallback = (limit = 50) => api.get("/api/analytics/anomalies-fallback", { params: { limit } });
 /** @deprecated Use complianceResolveAnomaly for GxP e-signature flow */
 export const resolveAnomaly = (id, notes) => api.put(`/api/anomalies/logs/${id}/resolve`, null, { params: { notes } });
-
 export const complianceVerifyOverride = (data) => api.post("/api/compliance/verify-override", data);
-
 export const complianceResolveAnomaly = (data) => api.post("/api/compliance/resolve-anomaly", data);
-
 export const getGxpAuditTrail = (params) => api.get("/api/compliance/audit-trail", { params });
-
 export const getComplianceStatus = () => api.get("/api/compliance/status");
 
 // Inventory
@@ -96,9 +102,7 @@ export const getAuditTrail = () => api.get("/api/admin/audit-trail");
 export const getComplianceReport = () => api.get("/api/compliance/report");
 export const getAdminComplianceReport = () => api.get("/api/admin/compliance/report");
 export const getCompliancePdf = (batchId) =>
-  api.get(`/api/admin/compliance/report/pdf?batch_id=${encodeURIComponent(batchId)}`, {
-    responseType: "blob",
-  });
+  api.get(`/api/admin/compliance/report/pdf?batch_id=${encodeURIComponent(batchId)}`, { responseType: "blob" });
 
 export const getSystemHealth = () => api.get("/health");
 

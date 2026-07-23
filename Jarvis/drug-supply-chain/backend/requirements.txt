@@ -4,12 +4,13 @@ sqlalchemy==2.0.25
 psycopg2-binary==2.9.10
 python-jose==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 pydantic==2.9.0
 python-dotenv==1.0.1
 pydantic-settings==2.14.0
 email-validator==2.0.0
 pymongo==4.8.0
-kafka-python==2.0.2
+kafka-python-ng==2.2.2
 paho-mqtt==2.0.0
 python-socketio==5.11.0
 influxdb-client==1.35.0

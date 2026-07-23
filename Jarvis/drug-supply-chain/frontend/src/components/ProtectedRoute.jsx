@@ -1,37 +1,36 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const ProtectedRoute = ({ children, role }) => {
-  const { user, token } = useAuth();
+  const { user, token, authLoaded } = useAuth();
+  const location = useLocation();
   const storedToken = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-  const isAuthenticated = Boolean(user || token || storedToken);
+  const authToken = token || storedToken;
+  const isAuthenticated = Boolean(user || authToken);
 
-  // ═══════════════════════════════════════════════════════════════════════════════════
-  // If no user/token, redirect to login
-  // ═══════════════════════════════════════════════════════════════════════════════════
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  if (!authLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-600">
+        Loading authorization...
+      </div>
+    );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // PRODUCTION-READY ROLE VALIDATION
-  // - Backend returns lowercase roles (admin, vendor, distributor)
-  // - Route specifies role requirement (admin, vendor, distributor)
-  // - Must match exactly
-  // ═══════════════════════════════════════════════════════════════════════
-  if (role && user?.role) {
-    const userRole = String(user.role).toLowerCase().trim();
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (role) {
+    const userRole = String(user?.role || "").toLowerCase().trim();
     const requiredRole = String(role).toLowerCase().trim();
-    
+
+    // No bypass: a missing or mismatched role is always denied, not waved through.
     if (userRole !== requiredRole) {
-      console.warn(`Access denied. User role '${userRole}' does not match required role '${requiredRole}'`);
+      console.warn(`Access denied. User role '${userRole || "none"}' does not match required role '${requiredRole}'`);
       return <Navigate to="/login" replace />;
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // User is authenticated and authorized
-  // ═══════════════════════════════════════════════════════════════════════
   return children;
 };
 

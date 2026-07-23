@@ -17,6 +17,17 @@ export const useDataWithFallback = (primaryFetch, fallbackFetch, dependencies = 
   const [error, setError] = useState(null);
   const [source, setSource] = useState("primary");
 
+  const extractItems = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== "object") return [];
+
+    for (const key of ["data", "items", "products", "alerts", "records", "batches", "users"]) {
+      if (Array.isArray(payload[key])) return payload[key];
+    }
+
+    return [];
+  };
+
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -24,43 +35,25 @@ export const useDataWithFallback = (primaryFetch, fallbackFetch, dependencies = 
     try {
       // Try primary endpoint first
       const response = await primaryFetch();
-      const result = response.data;
+      const items = extractItems(response.data);
 
-      // Extract data payload - handle different API response formats
-      let items = [];
-      if (Array.isArray(result)) {
-        items = result;
-      } else if (result.data && Array.isArray(result.data)) {
-        items = result.data;
-      } else if (result.products && Array.isArray(result.products)) {
-        items = result.products;
-      } else if (result.items && Array.isArray(result.items)) {
-        items = result.items;
-      } else if (result.alerts && Array.isArray(result.alerts)) {
-        items = result.alerts;
-      } else if (result.records && Array.isArray(result.records)) {
-        items = result.records;
+      // A healthy but empty database is not useful to the panel. Try the
+      // dataset fallback before showing an empty state to the user.
+      if (items.length > 0) {
+        setData(items);
+        setSource("primary");
+        console.log(`✅ Loaded ${items.length} records from primary endpoint`);
+        return;
       }
 
-      setData(items);
-      setSource("primary");
-      console.log(`✅ Loaded ${items.length} records from primary endpoint`);
+      throw new Error("Primary endpoint returned no records");
     } catch (primaryError) {
       console.warn("⚠️  Primary endpoint failed, attempting fallback:", primaryError.message);
 
       try {
         // Fall back to CSV endpoint
         const fallbackResponse = await fallbackFetch();
-        const fallbackResult = fallbackResponse.data;
-
-        let items = [];
-        if (Array.isArray(fallbackResult)) {
-          items = fallbackResult;
-        } else if (fallbackResult.data && Array.isArray(fallbackResult.data)) {
-          items = fallbackResult.data;
-        } else if (fallbackResult.records && Array.isArray(fallbackResult.records)) {
-          items = fallbackResult.records;
-        }
+        const items = extractItems(fallbackResponse.data);
 
         setData(items);
         setSource("csv_fallback");

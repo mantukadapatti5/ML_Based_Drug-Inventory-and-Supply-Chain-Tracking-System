@@ -1,56 +1,44 @@
 import api from "./api";
 
-const AUTH_PREFIX = "/api/auth";
+const LOGIN_PATHS = ["/api/auth/login", "/auth/login", "/api/auth/email-password/login"];
 
 export const registerUser = async (payload) => {
-  const response = await api.post(`${AUTH_PREFIX}/register`, payload);
+  const response = await api.post("/api/auth/register", payload);
   return response.data;
 };
 
-/**
- * PRODUCTION-READY LOGIN ENDPOINT
- * 
- * Posts to: http://localhost:8000/api/auth/login
- * 
- * Request: { email: "admin@gmail.com", password: "admin@12" }
- * 
- * Response: {
- *   access_token: "jwt_string",
- *   token_type: "bearer",
- *   email: "admin@gmail.com",
- *   role: "admin",
- *   redirectTo: "/admin/dashboard",
- *   user_id: 1234,
- *   expires_at: "2026-06-07T..."
- * }
- */
 export const loginUser = async (payload) => {
-  try {
-    const normalized = {
-      email: String(payload?.email || "").trim(),
-      password: String(payload?.password || ""),
-    };
+  const normalized = {
+    email: String(payload?.email || "").trim().toLowerCase(),
+    password: String(payload?.password || ""),
+  };
 
-    console.log("🔐 Sending normalized login request:", normalized);
-    const response = await api.post(`${AUTH_PREFIX}/login`, normalized, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    console.log("✅ Login response:", response.data);
-    return response.data;
-  } catch (error) {
-    console.error("❌ Login error:", error.response?.status, error.response?.data);
-    throw error;
+  let lastError = null;
+
+  for (const path of LOGIN_PATHS) {
+    try {
+      const response = await api.post(path, normalized, {
+        headers: { "Content-Type": "application/json" },
+      });
+      return response.data;
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      if (status && status !== 404) {
+        throw error;
+      }
+    }
   }
+
+  throw lastError || new Error("Login endpoint not found. Is the backend running on port 8000?");
 };
 
 export const verifyOtp = async (payload) => {
-  const response = await api.post(`${AUTH_PREFIX}/verify-otp`, payload);
+  const response = await api.post("/api/auth/verify-otp", payload);
   return response.data;
 };
 
 export const checkEmailRegistered = async (email) => {
-  const response = await api.get(`${AUTH_PREFIX}/check-email/${encodeURIComponent(email)}`);
+  const response = await api.get(`/api/auth/check-email/${encodeURIComponent(email)}`);
   return response.data;
 };

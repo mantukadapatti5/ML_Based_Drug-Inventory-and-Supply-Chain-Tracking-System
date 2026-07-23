@@ -1,30 +1,33 @@
-import { useState, useEffect } from "react";
-import { getInventoryItems, updateInventoryItem } from "../../services/api";
+import { useState } from "react";
+import { getInventoryItems, getInventoryItemsFallback, updateInventoryItem } from "../../services/api";
+import { useDataWithFallback, normalizeRecords } from "../../hooks/useDataWithFallback";
 import { formatINR } from "../../utils/currency";
 
 const DistributorInventory = () => {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [editStock, setEditStock] = useState(0);
 
-  const load = () => {
-    getInventoryItems()
-      .then((res) => setItems(res.data.items || res.data.products || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
+  const { data: rawItems, loading, error, source, refresh } = useDataWithFallback(
+    () => getInventoryItems(),
+    () => getInventoryItemsFallback(50)
+  );
 
-  useEffect(() => { load(); }, []);
+  const items = normalizeRecords(rawItems).map((item, index) => ({
+    id: item.id ?? index,
+    name: item.name ?? item.drugName ?? item.drug_id ?? "Unknown",
+    batch_no: item.batch_no ?? item.batchNo ?? item.batchNumber ?? "N/A",
+    quantity: Number(item.quantity ?? item.stock ?? 0),
+    price: Number(item.price ?? 0),
+  }));
 
   const saveStock = async (id) => {
     await updateInventoryItem(id, { quantity: editStock });
     setEditingId(null);
-    load();
+    refresh();
   };
 
-  const totalStock = items.reduce((s, i) => s + (i.quantity ?? i.stock ?? 0), 0);
-  const lowStock = items.filter((i) => (i.quantity ?? i.stock ?? 0) < 100).length;
+  const totalStock = items.reduce((s, i) => s + i.quantity, 0);
+  const lowStock = items.filter((i) => i.quantity < 100).length;
 
   return (
     <div className="space-y-6">

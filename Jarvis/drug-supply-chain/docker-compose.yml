@@ -115,9 +115,13 @@ services:
       KAFKA_SERVERS: redpanda:9092
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
+      FABRIC_MODE: mock
       FABRIC_PEER_ENDPOINT: peer0.org1.example.com:7051
       FABRIC_CHANNEL: pharmacatena
       FABRIC_CHAINCODE: provenance
+      SECRET_KEY: drug-supply-chain-secret-2024-sih
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
     depends_on:
       postgres:
         condition: service_healthy
@@ -139,6 +143,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
     container_name: pharma_frontend
     ports:
       - "3000:80"

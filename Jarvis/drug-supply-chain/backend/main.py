@@ -173,7 +173,9 @@ app.add_middleware(
 )
 
 # ROUTER ATTACHMENTS
+# Auth is mounted twice: /api/auth/* (canonical) and /auth/* (legacy clients + OAuth2 tokenUrl)
 app.include_router(auth_router, prefix="/api")
+app.include_router(auth_router)
 app.include_router(ml_router, prefix="/api")
 app.include_router(inventory_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")

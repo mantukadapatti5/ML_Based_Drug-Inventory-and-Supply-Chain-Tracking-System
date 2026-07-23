@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { loginUser, verifyOtp, checkEmailRegistered } from "../services/authService";
 import { useAuth } from "../context/AuthContext";
 
@@ -12,6 +12,7 @@ const LoginPage = () => {
   const [registrationHint, setRegistrationHint] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -66,15 +67,28 @@ const LoginPage = () => {
 
       // 4. Navigate to the EXACT path returned by backend (production-ready)
       // This ensures the backend controls all redirect logic
-      navigate(result.redirectTo, { replace: true });
+      const requestedPath = location.state?.from?.pathname;
+      const requestedRole = requestedPath?.split("/")[1]?.toLowerCase();
+      const authenticatedRole = String(result.role).toLowerCase();
+      const destination = requestedRole === authenticatedRole ? requestedPath : result.redirectTo;
+      navigate(destination, { replace: true });
       
     } catch (err) {
       if (!err.response) {
-        setError("Cannot reach the backend. Start it with: python -m uvicorn backend.main:app --reload --port 8000");
+        setError("Cannot reach the backend. Make sure it is running on http://127.0.0.1:8000");
         return;
       }
+      const status = err.response?.status;
       const detail = err.response?.data?.detail;
-      setError(typeof detail === "string" ? detail : err.message || "Login failed.");
+      if (status === 404) {
+        setError("Login service not found. Restart the backend, then try again.");
+        return;
+      }
+      if (status === 401) {
+        setError(typeof detail === "string" ? detail : "Invalid email or password.");
+        return;
+      }
+      setError(typeof detail === "string" ? detail : "Login failed. Please try again.");
     }
   };
 
@@ -118,7 +132,7 @@ const LoginPage = () => {
                 type="email"
                 value={form.email}
                 onChange={handleChange}
-                onBlur={handleEmailBlur}
+                // onBlur={handleEmailBlur} /* Temporarily disabled for testing */
                 className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </label>
